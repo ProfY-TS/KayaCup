@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaya Cup 2026 - Live Arena Dashboard (with NPCs)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0E1117;
+            --sidebar-bg: #161B22;
+            --text-color: #FFFFFF;
+            --accent-color: #00d4ff;
+            --border-color: #30363D;
+        }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #sidebar {
+            width: 320px;
+            min-width: 320px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+        }
+        h2, h3 { margin: 0; color: #fff; }
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label { font-size: 0.85rem; color: #8b949e; }
+        input[type="range"] { width: 100%; accent-color: var(--accent-color); }
+        .value-display { float: right; font-weight: bold; color: var(--accent-color); }
+        button {
+            background-color: #238636;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: background 0.2s ease;
+        }
+        button:hover { background-color: #2ea043; }
+        #btn-reset { background-color: #21262d; border: 1px solid var(--border-color); }
+        #btn-reset:hover { background-color: #30363d; }
+        
+        #left-container {
+            flex: 0 0 540px; 
+            width: 540px;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 15px;
+            box-sizing: border-box;
+            height: 100%;
+        }
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #07090e;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+        canvas { max-width: 100%; max-height: 100%; }
+        
+        /* BATTLEFIELD TICKER CONTAINER */
+        #ticker-panel {
+            height: 240px;
+            min-height: 240px;
+            max-height: 240px;
+            background-color: #11141a;
+            border: 1px solid #ff4560;
+            border-radius: 8px;
+            padding: 12px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        #ticker-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #ff4560;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #251216;
+            padding-bottom: 4px;
+        }
+        #ticker-box {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 6px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            line-height: 1.3;
+        }
+        .log-entry {
+            animation: fadeIn 0.2s ease-out;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+            min-height: 1.3em;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #dashboard {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+            height: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .time-banner {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--accent-color);
+            text-align: center;
+            background: #1f242c;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+        .chart-container {
+            flex: 1.2;
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            position: relative;
+            box-sizing: border-box;
+        }
+        .table-container {
+            flex: 0.8;
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 6px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        th { color: #8b949e; font-weight: 600; }
+        .npc-badge {
+            display: inline-block;
+            margin-left: 6px;
+            font-size: 0.7rem;
+            background: #2d2f36;
+            border-radius: 10px;
+            padding: 0px 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2>🏆 Kaya Cup 2026</h2>
+        <hr style="border-color: var(--border-color); width:100%;">
+        
+        <div class="setting-group">
+            <label>Contestants: <span id="val-qty" class="value-display">20</span></label>
+            <input type="range" id="param-qty" min="2" max="20" value="20" step="1">
+        </div>
+
+        <h3>⚡ Core Controls</h3>
+        <div class="setting-group" style="background: rgba(0, 212, 255, 0.05); padding: 8px; border-radius: 6px; border: 1px dashed rgba(0, 212, 255, 0.2);">
+            <label style="color: #fff; font-weight: bold;">Simulation Speed: <span id="val-speed" class="value-display">0.5x</span></label>
+            <input type="range" id="param-speed" min="0.25" max="2.0" value="0.5" step="0.25">
+        </div>
+
+        <h3>⚙️ Diffusion Settings</h3>
+        <div class="setting-group">
+            <label>Diffusion (&sigma;): <span id="val-sigma" class="value-display">0.20</span></label>
+            <input type="range" id="param-sigma" min="0" max="1" value="0.2" step="0.05">
+        </div>
+
+        <h3>⚔️ Fight Settings</h3>
+        <div class="setting-group">
+            <label>Fight Radius (r): <span id="val-r" class="value-display">0.25</span></label>
+            <input type="range" id="param-r" min="0.01" max="0.5" value="0.25" step="0.01">
+        </div>
+        <div class="setting-group">
+            <label>Poisson Rate (&lambda;): <span id="val-lam" class="value-display">5.0</span></label>
+            <input type="range" id="param-lam" min="0.1" max="10" value="5.0" step="0.1">
+        </div>
+
+        <h3>🛡️ Recovery Settings</h3>
+        <div class="setting-group">
+            <label>Boundary Width (r'): <span id="val-rprime" class="value-display">0.15</span></label>
+            <input type="range" id="param-rprime" min="0.01" max="0.5" value="0.15" step="0.01">
+        </div>
+        <div class="setting-group">
+            <label>Recovery Rate (&beta;): <span id="val-beta" class="value-display">2.0</span></label>
+            <input type="range" id="param-beta" min="0.1" max="5" value="2.0" step="0.1">
+        </div>
+
+        <div style="border-top: 1px solid var(--border-color); margin: 8px 0;"></div>
+        <div style="font-size:0.8rem; background:#1f2229; border-radius:8px; padding:6px; text-align:center;">
+            🐱 <span style="color:#ffaa66;">Kaya (Demon Cat)</span> | 🐶 <span style="color:#88ccff;">Butter (Healer Dog)</span><br>
+            <span style="font-size:0.7rem;">NPCs: No HP, just roam & affect fighters!</span>
+        </div>
+
+        <button id="btn-toggle">🚀 Start Tournament</button>
+        <button id="btn-reset">🔄 Reset Tournament</button>
+    </div>
+
+    <div id="left-container">
+        <div class="canvas-container" id="canvasBox">
+            <canvas id="diskCanvas" width="500" height="500"></canvas>
+        </div>
+        
+        <div id="ticker-panel">
+            <div id="ticker-title">📡 Live Report from the Battlefield</div>
+            <div id="ticker-box"></div>
+        </div>
+    </div>
+        
+    <div id="dashboard">
+        <div id="timer" class="time-banner">Tournament Time: 0.0s</div>
+        
+        <div class="chart-container">
+            <canvas id="hpChart"></canvas>
+        </div>
+        
+        <div class="table-container">
+            <h3>👑 Championship Ranking</h3>
+            <table id="leaderboard">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Name</th>
+                        <th>HP</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const STUDENT_NAMES = [
+            "Jac", "Z_Sheng", "YXuan", "Zhihan", "Ziwei", "Ray", "QRun", "Hao_T", 
+            "Shi_Hui", "Fyna", "JPoh", "LiY", "CXian", "Y_Ten", "Ivan", "CYun", 
+            "Justin", "Thurston", "Telur", "Kopi"
+        ];
+        
+        const DT = 0.05;
+        let players = [];       // human/contestant players (with HP)
+        let npcs = [];          // NPC array: { name, x, y, type, emoji }
+        let simTime = 0.0;
+        let isRunning = false;
+        let animationFrameId = null;
+        let hpChart = null;
+        let firstBloodOccurred = false;
+
+        // Visual Animation Tracking Arrays
+        let countdownTime = null; 
+        let countdownTimerId = null;
+        let screenShakeFrames = 0;
+        let visualRipples = [];      
+        let floatingTexts = [];      
+        let arenaAlertText = null;   
+
+        let lastFrameTimestamp = 0;
+
+        const canvas = document.getElementById('diskCanvas');
+        const ctx = canvas.getContext('2d');
+        const btnToggle = document.getElementById('btn-toggle');
+        const btnReset = document.getElementById('btn-reset');
+        const tickerBox = document.getElementById('ticker-box');
+        const canvasBox = document.getElementById('canvasBox');
+
+        function logEvent(message, color = "#ffffff") {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.style.color = color;
+            entry.innerHTML = `[${simTime.toFixed(1)}s] ${message}`;
+            tickerBox.appendChild(entry);
+            if (tickerBox.children.length > 12) {
+                tickerBox.removeChild(tickerBox.firstChild);
+            }
+        }
+
+        function triggerShake() {
+            screenShakeFrames = 15;
+        }
+
+        function createFloatingText(x, y, text, color) {
+            floatingTexts.push({ x, y, text, color, alpha: 0.7, lifetime: 55 });
+        }
+
+        function createRipple(x, y, maxRadius) {
+            visualRipples.push({ x, y, radius: 2, maxRadius, alpha: 0.8 });
+        }
+
+        function triggerArenaAlert(text, subtitle = "") {
+            arenaAlertText = { text, subtitle, lifetime: 45, scale: 0.5 };
+        }
+
+        function generateDistinctColors(num) {
+            const colors = [];
+            for(let i=0; i<num; i++) {
+                const hue = (i * (360 / Math.max(num, 1))) % 360;
+                colors.push(`hsl(${hue}, 85%, 60%)`);
+            }
+            return colors;
+        }
+
+        function randomNormal() {
+            let u = 0, v = 0;
+            while(u === 0) u = Math.random(); 
+            while(v === 0) v = Math.random();
+            return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        }
+
+        function getParams() {
+            return {
+                sigma: parseFloat(document.getElementById('param-sigma').value),
+                r_limit: parseFloat(document.getElementById('param-r').value),
+                lam: parseFloat(document.getElementById('param-lam').value),
+                r_prime: parseFloat(document.getElementById('param-rprime').value),
+                beta: parseFloat(document.getElementById('param-beta').value),
+                qty: parseInt(document.getElementById('param-qty').value),
+                speed: parseFloat(document.getElementById('param-speed').value)
+            };
+        }
+
+        function initializeGame(qty) {
+            // Human contestants
+            const arr = [];
+            for (let i = 0; i < qty; i++) {
+                let r = Math.sqrt(Math.random()) * 0.85; 
+                let theta = Math.random() * 2 * Math.PI;
+                arr.push({
+                    name: STUDENT_NAMES[i] || `Student ${i+1}`,
+                    x: r * Math.cos(theta),
+                    y: r * Math.sin(theta),
+                    hp: 100.0
+                });
+            }
+            
+            // NPCs: Kaya (demon cat) and Butter (healer dog)
+            const npcList = [
+                { name: "Kaya", type: "demon", emoji: "🐱", x: 0.2, y: 0.3, hp: null },
+                { name: "Butter", type: "healer", emoji: "🐶", x: -0.3, y: -0.2, hp: null }
+            ];
+            // random initial positions inside disk
+            npcList.forEach(npc => {
+                let angle = Math.random() * 2 * Math.PI;
+                let rad = Math.sqrt(Math.random()) * 0.9;
+                npc.x = rad * Math.cos(angle);
+                npc.y = rad * Math.sin(angle);
+            });
+            
+            firstBloodOccurred = false;
+            tickerBox.innerHTML = "";
+            visualRipples = [];
+            floatingTexts = [];
+            arenaAlertText = null;
+            countdownTime = null;
+            if(countdownTimerId) clearInterval(countdownTimerId);
+            
+            logEvent("⚔️ Contestants dropped! NPCs Kaya (demon cat) & Butter (healer dog) roam the arena.", "#00d4ff");
+            return { contestants: arr, npcs: npcList };
+        }
+
+        // Step only for NPCs: diffusion (random walk)
+        function stepNPCs(npcsList, sigmaStep) {
+            npcsList.forEach(npc => {
+                let newX = npc.x + randomNormal() * sigmaStep;
+                let newY = npc.y + randomNormal() * sigmaStep;
+                let dist = Math.sqrt(newX*newX + newY*newY);
+                if (dist > 1) {
+                    newX /= dist;
+                    newY /= dist;
+                }
+                npc.x = newX;
+                npc.y = newY;
+            });
+        }
+
+        // NPC special abilities: demon (Kaya) deals 1 dmg, healer (Butter) heals 1 HP (capped at 100, ignoring ≤25 rule)
+        function applyNPCInteractions(contestants, npcsList, params, dt) {
+            const { r_limit, lam } = params;
+            let fightProb = 1 - Math.exp(-lam * dt);   // base poisson rate λ=5 per sec, but we can use separate rate? Requirement: Poisson rate 2.
+            // Requirement says: "Poisson rate 2" for both NPC effects, independent of global lam? We'll implement with specific rate = 2 (events/sec).
+            const NPC_RATE = 2.0;      // 2 interactions per second
+            let npcEffectProb = 1 - Math.exp(-NPC_RATE * dt);
+            
+            for (let npc of npcsList) {
+                for (let p of contestants) {
+                    if (p.hp <= 0) continue;
+                    let dx = p.x - npc.x;
+                    let dy = p.y - npc.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < r_limit) {
+                        if (Math.random() < npcEffectProb) {
+                            if (npc.type === "demon") {
+                                // Kaya: deals 1 damage
+                                let oldHp = p.hp;
+                                p.hp = Math.max(0, p.hp - 1.0);
+                                createRipple((p.x + npc.x)/2, (p.y + npc.y)/2, r_limit * 80);
+                                createFloatingText(p.x, p.y, "-1 HP", "#ff6666");
+                                if (p.hp === 0 && oldHp > 0) {
+                                    triggerShake();
+                                    let livingCount = contestants.filter(c => c.hp > 0).length;
+                                    if (!firstBloodOccurred) {
+                                        firstBloodOccurred = true;
+                                        isRunning = false;
+                                        triggerArenaAlert("🩸 FIRST BLOOD!", "");
+                                        setTimeout(() => {
+                                            logEvent(`🩸 FIRST BLOOD! [${p.name}] was struck down by Kaya the demon cat!`, "#ff3333");
+                                            triggerArenaAlert(`${p.name.toUpperCase()} OUT!`, "Neutralized by Kaya 🐱");
+                                            triggerShake();
+                                            isRunning = true;
+                                            lastFrameTimestamp = performance.now(); 
+                                            animationFrameId = requestAnimationFrame(gameLoop);
+                                        }, 2000);
+                                    } else {
+                                        logEvent(`💀 ELIMINATED! Kaya the demon cat knocked out [${p.name}]!`, "#ff4560");
+                                        triggerArenaAlert(`${p.name.toUpperCase()} OUT!`, "Slain by Kaya 🐱");
+                                    }
+                                    if (livingCount === 3) {
+                                        logEvent(`👑 DOWN TO THE WIRE! Only 3 contestants left!`, "#ffea00");
+                                    }
+                                } else if (p.hp > 0 && p.hp <= 25) {
+                                    if (Math.random() < 0.08) logEvent(`😾 Kaya claws [${p.name}]! (-1 HP)`, "#ff9f43");
+                                }
+                            } 
+                            else if (npc.type === "healer") {
+                                // Butter: heals +1 HP, ignore the <=25 boundary rule, cap at 100.
+                                if (p.hp < 100) {
+                                    let newHp = Math.min(100, p.hp + 1.0);
+                                    p.hp = newHp;
+                                    createFloatingText(p.x, p.y, "+1 HP", "#88ffaa");
+                                    if (Math.random() < 0.06) logEvent(`💖 Butter heals [${p.name}]! (+1 HP)`, "#aaffdd");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function stepSimulation(playerList, npcsList, params) {
+            const { sigma, r_limit, lam, r_prime, beta } = params;
+            let stepSize = sigma * Math.sqrt(DT);
+            
+            // 1. Diffusion for contestants
+            playerList.forEach(p => {
+                if (p.hp <= 0) return;
+                let newX = p.x + randomNormal() * stepSize;
+                let newY = p.y + randomNormal() * stepSize;
+                let dist = Math.sqrt(newX*newX + newY*newY);
+                if (dist > 1) {
+                    newX /= dist;
+                    newY /= dist;
+                }
+                p.x = newX; 
+                p.y = newY;
+            });
+            
+            // 1b. Diffusion for NPCs
+            stepNPCs(npcsList, stepSize);
+            
+            // 2. Original Fight Step Logic (contestants vs contestants only)
+            let fightProb = 1 - Math.exp(-lam * DT);
+            for (let i = 0; i < playerList.length; i++) {
+                for (let j = i + 1; j < playerList.length; j++) {
+                    if (playerList[i].hp <= 0 || playerList[j].hp <= 0) continue;
+                    
+                    let dx = playerList[i].x - playerList[j].x;
+                    let dy = playerList[i].y - playerList[j].y;
+                    let distance = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (distance < r_limit) {
+                        if (Math.random() < fightProb) {
+                            let p_i_wins = playerList[i].hp / (playerList[i].hp + playerList[j].hp + 1e-9);
+                            let winner, loser;
+                            
+                            if (Math.random() < p_i_wins) {
+                                playerList[j].hp = Math.max(0, playerList[j].hp - 1.0);
+                                winner = playerList[i]; loser = playerList[j];
+                            } else {
+                                playerList[i].hp = Math.max(0, playerList[i].hp - 1.0);
+                                winner = playerList[j]; loser = playerList[i];
+                            }
+                            
+                            createRipple((winner.x + loser.x)/2, (winner.y + loser.y)/2, r_limit * 80);
+                            createFloatingText(loser.x, loser.y, "-1 HP", "#ff3333");
+
+                            if (loser.hp === 0) {
+                                triggerShake();
+                                let livingCount = playerList.filter(p => p.hp > 0).length;
+                                if (!firstBloodOccurred) {
+                                    firstBloodOccurred = true;
+                                    isRunning = false;
+                                    triggerArenaAlert("🩸 FIRST BLOOD!", "");
+                                    setTimeout(() => {
+                                        logEvent(`🩸 FIRST BLOOD! [${loser.name}] has been neutralized by [${winner.name}]!`, "#ff3333");
+                                        triggerArenaAlert(`${loser.name.toUpperCase()} OUT!`, `Neutralized by ${winner.name}`);
+                                        triggerShake();
+                                        isRunning = true;
+                                        lastFrameTimestamp = performance.now(); 
+                                        animationFrameId = requestAnimationFrame(gameLoop);
+                                    }, 2000);
+                                } else {
+                                    logEvent(`💀 ELIMINATED! [${winner.name}] has knocked out [${loser.name}]!`, "#ff4560");
+                                    triggerArenaAlert(`${loser.name.toUpperCase()} OUT!`, `Neutralized by ${winner.name}`);
+                                }
+                                if (livingCount === 3) {
+                                    logEvent(`👑 DOWN TO THE WIRE! Only 3 contestants left!`, "#ffea00");
+                                }
+                            } else {
+                                if (loser.hp <= 25 && Math.random() < 0.03) {
+                                    logEvent(`🚨 [${loser.name}] is in critical condition! [${winner.name}] is pressing hard!`, "#ff9f43");
+                                } else if (Math.random() < 0.01) {
+                                    const verbs = [`⚔️ [${winner.name}] lands a swift hit on [${loser.name}]! (-1 HP)`, `💥 [${winner.name}] breaks through [${loser.name}]'s defense! (-1 HP)`, `⚡ [${winner.name}] won a quick clash against [${loser.name}]!`];
+                                    logEvent(verbs[Math.floor(Math.random() * verbs.length)], "#ffffff");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 3. NPC special abilities interaction (demon & healer) with contestants
+            applyNPCInteractions(playerList, npcsList, params, DT);
+            
+            // 4. Border Recovery Step (only contestants, original rule: only if HP <=25 and near boundary)
+            let recoveryProb = 1 - Math.exp(-beta * DT);
+            let boundaryThreshold = 1.0 - r_prime;
+            playerList.forEach(p => {
+                if (p.hp > 0 && p.hp <= 25) { 
+                    let distFromOrigin = Math.sqrt(p.x*p.x + p.y*p.y);
+                    if (distFromOrigin >= boundaryThreshold) {
+                        if (Math.random() < recoveryProb) {
+                            p.hp = Math.min(25.0, p.hp + 1.0); 
+                            if(Math.random() < 0.2) createFloatingText(p.x, p.y, "+1 HP", "#00ff88");
+                        }
+                    }
+                }
+            });
+            
+            return playerList;
+        }
+
+        const lineEndLabelsPlugin = {
+            id: 'lineEndLabels',
+            afterDatasetsDraw(chart) {
+                const { ctx, chartArea: { right } } = chart;
+                ctx.save();
+                ctx.font = 'bold 12px sans-serif';
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    const data = dataset.data;
+                    const lastPoint = data[data.length - 1];
+                    if (!lastPoint || typeof lastPoint.y === 'undefined' || lastPoint.y === null) return;
+                    const lastMetaPoint = meta.data[meta.data.length - 1];
+                    if (lastMetaPoint) {
+                        ctx.fillStyle = dataset.borderColor;
+                        ctx.fillText(dataset.label, lastMetaPoint.x + 5, lastMetaPoint.y + 4);
+                    }
+                });
+                ctx.restore();
+            }
+        };
+
+        function resetChartInstance() {
+            if (hpChart) hpChart.destroy();
+            const params = getParams();
+            const colors = generateDistinctColors(players.length);
+            const datasets = players.map((p, idx) => ({
+                label: p.name,
+                data: [{x: 0, y: 100}],
+                borderColor: colors[idx],
+                backgroundColor: 'transparent',
+                borderWidth: 2.5,
+                pointRadius: 0,
+                tension: 0.1
+            }));
+            const ctxChart = document.getElementById('hpChart').getContext('2d');
+            hpChart = new Chart(ctxChart, {
+                type: 'line',
+                data: { datasets: datasets },
+                plugins: [lineEndLabelsPlugin],
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    layout: { padding: { right: 70 } },
+                    scales: {
+                        x: { type: 'linear', position: 'bottom', title: { display: true, text: 'Time (seconds)', color: '#8b949e' }, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                        y: { min: 0, max: 100, title: { display: true, text: 'Health Points (HP)', color: '#8b949e' }, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function appendChartData(timeValue) {
+            if (!hpChart) return;
+            players.forEach((p, idx) => {
+                if (hpChart.data.datasets[idx]) {
+                    hpChart.data.datasets[idx].data.push({ x: timeValue, y: p.hp });
+                }
+            });
+            if (timeValue > 15) {
+                hpChart.options.scales.x.min = timeValue - 15;
+                hpChart.options.scales.x.max = timeValue;
+            } else {
+                hpChart.options.scales.x.min = 0;
+                hpChart.options.scales.x.max = 15;
+            }
+            hpChart.update('none');
+        }
+
+        function getHpColor(hp) {
+            if (hp <= 0) return "#444444";
+            let frac = hp / 100.0;
+            let r = Math.floor((1.0 - frac) * 255);
+            let g = Math.floor(frac * 255);
+            return `rgb(${r}, ${g}, 0)`;
+        }
+
+        function drawScene() {
+            ctx.save();
+            if (screenShakeFrames > 0) {
+                let dx = (Math.random() - 0.5) * 7;
+                let dy = (Math.random() - 0.5) * 7;
+                ctx.translate(dx, dy);
+                screenShakeFrames--;
+            }
+            const params = getParams();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = canvas.width * 0.45;
+            
+            let boundaryRadius = radius * (1 - params.r_prime);
+            let pulseGrad = ctx.createRadialGradient(cx, cy, boundaryRadius, cx, cy, radius);
+            let pulseIntensity = 0.06 + 0.04 * Math.sin(Date.now() / 150);
+            pulseGrad.addColorStop(0, 'rgba(0, 255, 136, 0)');
+            pulseGrad.addColorStop(1, `rgba(0, 255, 136, ${pulseIntensity})`);
+            ctx.fillStyle = pulseGrad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#00d4ff';
+            ctx.lineWidth = 3;
+            ctx.globalAlpha = 0.4;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx, cy, boundaryRadius, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([6, 6]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1.0;
+            
+            let highestHp = -1;
+            let leaderRef = null;
+            players.forEach(p => { if (p.hp > highestHp && p.hp > 0) { highestHp = p.hp; leaderRef = p; } });
+            
+            visualRipples.forEach((ripple, idx) => {
+                ripple.radius += 2.5;
+                ripple.alpha -= 0.03;
+                if (ripple.alpha <= 0 || ripple.radius >= ripple.maxRadius) { visualRipples.splice(idx, 1); return; }
+                ctx.save();
+                ctx.globalAlpha = ripple.alpha;
+                ctx.beginPath();
+                ctx.arc(cx + ripple.x * radius, cy + ripple.y * radius, ripple.radius, 0, 2 * Math.PI);
+                ctx.strokeStyle = '#ff3366';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.restore();
+            });
+            
+            // Draw Contestants
+            players.forEach(p => {
+                let screenX = cx + p.x * radius, screenY = cy + p.y * radius;
+                if (p.hp > 0) {
+                    if (p.hp <= 25) {
+                        let distressPulse = 10 + 6 * Math.sin(Date.now() / 60);
+                        ctx.beginPath();
+                        ctx.arc(screenX, screenY, distressPulse, 0, 2 * Math.PI);
+                        ctx.fillStyle = 'rgba(255, 69, 96, 0.25)';
+                        ctx.fill();
+                    }
+                    if (p === leaderRef) {
+                        ctx.beginPath();
+                        ctx.arc(screenX, screenY, 12, 0, 2 * Math.PI);
+                        ctx.strokeStyle = '#ffd700';
+                        ctx.lineWidth = 1.5;
+                        ctx.shadowBlur = 8;
+                        ctx.shadowColor = '#ffd700';
+                        ctx.stroke();
+                        ctx.shadowBlur = 0; 
+                    }
+                }
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, 7, 0, 2 * Math.PI);
+                ctx.fillStyle = getHpColor(p.hp);
+                ctx.fill();
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.stroke();
+                ctx.fillStyle = p.hp > 0 ? '#FFFFFF' : '#555555';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.fillText(p.name, screenX + 11, screenY + 4);
+                if (p === leaderRef && p.hp > 0) { ctx.fillStyle = '#ffd700'; ctx.fillText('👑', screenX - 6, screenY - 10); }
+            });
+            
+            // Draw NPCs (Kaya & Butter)
+            npcs.forEach(npc => {
+                let screenX = cx + npc.x * radius, screenY = cy + npc.y * radius;
+                ctx.font = '28px sans-serif';
+                ctx.shadowBlur = 3;
+                ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                ctx.fillText(npc.emoji, screenX - 14, screenY + 10);
+                ctx.font = 'bold 9px monospace';
+                ctx.fillStyle = '#dddddd';
+                ctx.fillText(npc.name, screenX - 12, screenY - 8);
+                ctx.shadowBlur = 0;
+            });
+            
+            floatingTexts.forEach((ft, idx) => {
+                ft.y -= 0.05; ft.lifetime--; ft.alpha -= 0.03;
+                if (ft.lifetime <= 0 || ft.alpha <= 0) { floatingTexts.splice(idx, 1); return; }
+                ctx.save();
+                ctx.globalAlpha = ft.alpha;
+                ctx.fillStyle = ft.color;
+                ctx.font = 'bold 12px monospace';
+                ctx.fillText(ft.text, cx + ft.x * radius - 10, cy + ft.y * radius - 12);
+                ctx.restore();
+            });
+            
+            if (countdownTime !== null) {
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'rgba(7, 9, 14, 0.4)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.font = 'bold 85px sans-serif';
+                ctx.fillStyle = countdownTime === "FIGHT!" ? '#ff4560' : '#00d4ff';
+                ctx.fillText(countdownTime, cx, cy);
+                ctx.restore();
+            }
+            
+            if (arenaAlertText !== null) {
+                arenaAlertText.lifetime--;
+                if (arenaAlertText.scale < 1.0) arenaAlertText.scale += 0.05;
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.globalAlpha = Math.min(1.0, arenaAlertText.lifetime / 10);
+                ctx.translate(cx, cy - 80);
+                ctx.scale(arenaAlertText.scale, arenaAlertText.scale);
+                ctx.font = 'bold 36px sans-serif';
+                ctx.fillStyle = '#ff4560';
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 4;
+                ctx.strokeText(arenaAlertText.text, 0, 0);
+                ctx.fillText(arenaAlertText.text, 0, 0);
+                if (arenaAlertText.subtitle) {
+                    ctx.font = 'bold 14px sans-serif';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.strokeText(arenaAlertText.subtitle, 0, 30);
+                    ctx.fillText(arenaAlertText.subtitle, 0, 30);
+                }
+                ctx.restore();
+                if (arenaAlertText.lifetime <= 0) arenaAlertText = null;
+            }
+            ctx.restore();
+        }
+
+        function updateLeaderboard() {
+            document.getElementById('timer').innerText = `Tournament Time: ${simTime.toFixed(1)}s`;
+            const sorted = [...players].sort((a,b) => b.hp - a.hp);
+            const tbody = document.querySelector('#leaderboard tbody');
+            tbody.innerHTML = '';
+            sorted.forEach((p, index) => {
+                let row = `<tr><td>${index+1}</td><td style="font-weight:bold; color:${p.hp>0?'#fff':'#555'}">${p.name} ${index===0 && p.hp>0?'👑':''}</td><td style="color:${getHpColor(p.hp)}">${p.hp.toFixed(1)}</td></tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+        function resetSim() {
+            isRunning = false;
+            if(countdownTimerId) clearInterval(countdownTimerId);
+            cancelAnimationFrame(animationFrameId);
+            btnToggle.innerText = "🚀 Start Tournament";
+            btnToggle.style.backgroundColor = "#238636";
+            const params = getParams();
+            const gameData = initializeGame(params.qty);
+            players = gameData.contestants;
+            npcs = gameData.npcs;
+            simTime = 0.0;
+            lastFrameTimestamp = 0;
+            updateLeaderboard();
+            drawScene();
+            resetChartInstance();
+        }
+
+        function gameLoop(currentTimestamp) {
+            if (!isRunning) return;
+            if (!lastFrameTimestamp) lastFrameTimestamp = currentTimestamp;
+            let elapsed = currentTimestamp - lastFrameTimestamp;
+            const params = getParams();
+            let optimalStepDelay = 50 / params.speed;
+            if (countdownTime === null) {
+                while (elapsed >= optimalStepDelay) {
+                    players = stepSimulation(players, npcs, params);
+                    simTime = Math.round((simTime + DT) * 100) / 100;
+                    elapsed -= optimalStepDelay;
+                    lastFrameTimestamp = currentTimestamp - elapsed;
+                    let survivors = players.filter(p => p.hp > 0);
+                    if(survivors.length <= 1) {
+                        isRunning = false;
+                        btnToggle.innerText = "🚀 Start Tournament";
+                        btnToggle.style.backgroundColor = "#238636";
+                        if(survivors.length === 1) {
+                            logEvent(`👑 TOURNAMENT OVER! [${survivors[0].name}] is the ultimate champion!`, "#ffea00");
+                            triggerArenaAlert("VICTORY!", `${survivors[0].name.toUpperCase()} IS CHAMPION`);
+                        } else {
+                            logEvent("💀 MUTUAL DESTRUCTION! No survivors remain on the field.", "#ff4560");
+                        }
+                        updateLeaderboard();
+                        appendChartData(simTime);
+                        drawScene();
+                        cancelAnimationFrame(animationFrameId);
+                        return;
+                    }
+                }
+                updateLeaderboard();
+                appendChartData(simTime);
+            } else {
+                lastFrameTimestamp = currentTimestamp;
+            }
+            drawScene();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function runCountdownSequence() {
+            let count = 3;
+            countdownTime = count;
+            logEvent(`⏱️ Tournament starting in ${count}...`, "#00d4ff");
+            countdownTimerId = setInterval(() => {
+                count--;
+                if (count > 0) { countdownTime = count; logEvent(`⏱️ ${count}...`, "#00d4ff"); }
+                else if (count === 0) { countdownTime = "FIGHT!"; logEvent("⚔️ FIGHT! Arena system is active!", "#ff4560"); }
+                else { clearInterval(countdownTimerId); countdownTime = null; lastFrameTimestamp = performance.now(); }
+                drawScene();
+            }, 900);
+        }
+
+        const inputs = document.querySelectorAll('input[type="range"]');
+        inputs.forEach(input => {
+            input.addEventListener('input', (e) => {
+                const parts = e.target.id.split('-');
+                const valSpan = document.getElementById(`val-${parts[1]}`);
+                valSpan.innerText = parseFloat(e.target.value).toFixed(e.target.step.includes('.') ? e.target.step.split('.')[1].length : 0) + (e.target.id === 'param-speed' ? 'x' : '');
+                if(e.target.id === 'param-qty' && !isRunning) resetSim();
+                else drawScene();
+            });
+        });
+
+        btnToggle.addEventListener('click', () => {
+            if (isRunning) {
+                isRunning = false;
+                btnToggle.innerText = "🚀 Start Tournament";
+                btnToggle.style.backgroundColor = "#238636";
+                if(countdownTimerId) clearInterval(countdownTimerId);
+                cancelAnimationFrame(animationFrameId);
+            } else {
+                isRunning = true;
+                btnToggle.innerText = "⏸️ Pause Tournament";
+                btnToggle.style.backgroundColor = "#d13b3b";
+                if (simTime === 0.0 && countdownTime === null) runCountdownSequence();
+                else lastFrameTimestamp = performance.now();
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        });
+        btnReset.addEventListener('click', resetSim);
+        setInterval(() => { if(!isRunning) drawScene(); }, 30);
+        resetSim();
+    </script>
+</body>
+</html>
