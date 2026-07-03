@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaya Cup 2026 - Live Arena Dashboard (with NPCs)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0E1117;
+            --sidebar-bg: #161B22;
+            --text-color: #FFFFFF;
+            --accent-color: #00d4ff;
+            --border-color: #30363D;
+        }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #sidebar {
+            width: 320px;
+            min-width: 320px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+        }
+        h2, h3 { margin: 0; color: #fff; }
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label { font-size: 0.85rem; color: #8b949e; }
+        input[type="range"] { width: 100%; accent-color: var(--accent-color); }
+        .value-display { float: right; font-weight: bold; color: var(--accent-color); }
+        button {
+            background-color: #238636;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: background 0.2s ease;
+        }
+        button:hover { background-color: #2ea043; }
+        #btn-reset { background-color: #21262d; border: 1px solid var(--border-color); }
+        #btn-reset:hover { background-color: #30363d; }
+        
+        #left-container {
+            flex: 0 0 540px; 
+            width: 540px;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 15px;
+            box-sizing: border-box;
+            height: 100%;
+        }
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #07090e;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+        canvas { max-width: 100%; max-height: 100%; }
+        
+        #ticker-panel {
+            height: 240px;
+            min-height: 240px;
+            max-height: 240px;
+            background-color: #11141a;
+            border: 1px solid #ff4560;
+            border-radius: 8px;
+            padding: 12px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        #ticker-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #ff4560;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #251216;
+            padding-bottom: 4px;
+        }
+        #ticker-box {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 6px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            line-height: 1.3;
+        }
+        .log-entry {
+            animation: fadeIn 0.2s ease-out;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+            min-height: 1.3em;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #dashboard {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+            height: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .time-banner {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--accent-color);
+            text-align: center;
+            background: #1f242c;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+        .chart-container {
+            flex: 1.2;
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            position: relative;
+            box-sizing: border-box;
+        }
+        .table-container {
+            flex: 0.8;
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 6px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        th { color: #8b949e; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2>🏆 Kaya Cup 2026</h2>
+        <hr style="border-color: var(--border-color); width:100%;">
+        
+        <div class="setting-group">
+            <label>Contestants: <span id="val-qty" class="value-display">20</span></label>
+            <input type="range" id="param-qty" min="2" max="20" value="20" step="1">
+        </div>
+
+        <h3>⚡ Core Controls</h3>
+        <div class="setting-group" style="background: rgba(0, 212, 255, 0.05); padding: 8px; border-radius: 6px; border: 1px dashed rgba(0, 212, 255, 0.2);">
+            <label style="color: #fff; font-weight: bold;">Simulation Speed: <span id="val-speed" class="value-display">0.5x</span></label>
+            <input type="range" id="param-speed" min="0.25" max="2.0" value="0.5" step="0.25">
+        </div>
+
+        <h3>⚙️ Diffusion Settings</h3>
+        <div class="setting-group">
+            <label>Diffusion (&sigma;): <span id="val-sigma" class="value-display">0.20</span></label>
+            <input type="range" id="param-sigma" min="0" max="1" value="0.2" step="0.05">
+        </div>
+
+        <h3>⚔️ Fight Settings</h3>
+        <div class="setting-group">
+            <label>Fight Radius (r): <span id="val-r" class="value-display">0.25</span></label>
+            <input type="range" id="param-r" min="0.01" max="0.5" value="0.25" step="0.01">
+        </div>
+        <div class="setting-group">
+            <label>Poisson Rate (&lambda;): <span id="val-lam" class="value-display">5.0</span></label>
+            <input type="range" id="param-lam" min="0.1" max="10" value="5.0" step="0.1">
+        </div>
+
+        <h3>🛡️ Recovery Settings</h3>
+        <div class="setting-group">
+            <label>Boundary Width (r'): <span id="val-rprime" class="value-display">0.15</span></label>
+            <input type="range" id="param-rprime" min="0.01" max="0.5" value="0.15" step="0.01">
+        </div>
+        <div class="setting-group">
+            <label>Recovery Rate (&beta;): <span id="val-beta" class="value-display">2.0</span></label>
+            <input type="range" id="param-beta" min="0.1" max="5" value="2.0" step="0.1">
+        </div>
+
+        <div style="border-top: 1px solid var(--border-color); margin: 8px 0;"></div>
+        <div style="font-size:0.8rem; background:#1f2229; border-radius:8px; padding:6px; text-align:center;">
+            🐱 <span style="color:#ffaa66;">Kaya (Demon Cat)</span> | 🐶 <span style="color:#88ccff;">Butter (Healer Dog)</span><br>
+            <span style="font-size:0.7rem;">NPCs: No HP, just roam & affect fighters!</span>
+        </div>
+
+        <button id="btn-toggle">🚀 Start Tournament</button>
+        <button id="btn-reset">🔄 Reset Tournament</button>
+    </div>
+
+    <div id="left-container">
+        <div class="canvas-container" id="canvasBox">
+            <canvas id="diskCanvas" width="500" height="500"></canvas>
+        </div>
+        
+        <div id="ticker-panel">
+            <div id="ticker-title">📡 Live Report from the Battlefield</div>
+            <div id="ticker-box"></div>
+        </div>
+    </div>
+        
+    <div id="dashboard">
+        <div id="timer" class="time-banner">Tournament Time: 0.0s</div>
+        
+        <div class="chart-container">
+            <canvas id="hpChart"></canvas>
+        </div>
+        
+        <div class="table-container">
+            <h3>👑 Championship Ranking</h3>
+            <table id="leaderboard">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Name</th>
+                        <th>HP</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Load game.js -->
+    <script src="game.js"></script>
+    
+    <script>
+        // --- DOM Element References ---
+        const canvas = document.getElementById('diskCanvas');
+        const ctx = canvas.getContext('2d');
+        const btnToggle = document.getElementById('btn-toggle');
+        const btnReset = document.getElementById('btn-reset');
+        const tickerBox = document.getElementById('ticker-box');
+
+        // --- Override engine's DOM references ---
+        KayaEngine.setCanvas(canvas, ctx);
+        KayaEngine.setTickerBox(tickerBox);
+        KayaEngine.setToggleButton(btnToggle);
+        KayaEngine.setResetButton(btnReset);
+
+        // --- Range Input Handlers ---
+        const inputs = document.querySelectorAll('input[type="range"]');
+        inputs.forEach(input => {
+            input.addEventListener('input', (e) => {
+                const parts = e.target.id.split('-');
+                const valSpan = document.getElementById(`val-${parts[1]}`);
+                valSpan.innerText = parseFloat(e.target.value).toFixed(e.target.step.includes('.') ? e.target.step.split('.')[1].length : 0) + (e.target.id === 'param-speed' ? 'x' : '');
+                if(e.target.id === 'param-qty' && !KayaEngine.isRunning()) KayaEngine.resetSim();
+                else KayaEngine.drawScene();
+            });
+        });
+
+        // --- Button Handlers ---
+        btnToggle.addEventListener('click', () => {
+            KayaEngine.toggleSimulation();
+        });
+
+        btnReset.addEventListener('click', () => {
+            KayaEngine.resetSim();
+        });
+
+        // --- Auto-draw when paused ---
+        setInterval(() => { 
+            if(!KayaEngine.isRunning()) KayaEngine.drawScene(); 
+        }, 30);
+
+        // --- Initialize ---
+        KayaEngine.resetSim();
+    </script>
+</body>
+</html>
